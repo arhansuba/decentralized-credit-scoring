@@ -2,7 +2,7 @@
 giza_actions==0.3.0
 giza_cli==0.15.0
 giza_agents
-giza-sdk = "^0.1.1"
+giza-sdk 
 numpy==1.26.4
 pandas==1.5.3
 prefect==2.14.6
