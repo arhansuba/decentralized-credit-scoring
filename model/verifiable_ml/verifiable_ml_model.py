@@ -1,15 +1,18 @@
+from matplotlib import _preprocess_data
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from crypten.dp import GaussianMechanism
-from crypten.nn import DPLinear
-from crypten.optim import DPOptimizer
-from crypten.torch_utils import to_crypten_tensor
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
-from preprocessing.data_preprocessing import preprocess_data
+
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def load_preprocessed_data(file_path: str) -> pd.DataFrame:
     """
@@ -21,6 +24,7 @@ def load_preprocessed_data(file_path: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The preprocessed data as a DataFrame.
     """
+    logger.info(f"Loading data from {file_path}...")
     data = pd.read_csv(file_path)
     return data
 
@@ -34,13 +38,12 @@ def prepare_features_and_target(data: pd.DataFrame) -> tuple[np.ndarray, np.ndar
     Returns:
         tuple[np.ndarray, np.ndarray]: A tuple containing the features and target variables.
     """
-    # Define features and target
+    logger.info("Preparing features and target...")
     X = data.drop(columns=["DEFAULT"]).values
     y = data["DEFAULT"].values
-
     return X, y
 
-def train_logistic_regression_model(X: np.ndarray, y: np.ndarray):
+def train_logistic_regression_model(X: np.ndarray, y: np.ndarray) -> LogisticRegression:
     """
     Trains a logistic regression model using the given features and target.
 
@@ -51,11 +54,12 @@ def train_logistic_regression_model(X: np.ndarray, y: np.ndarray):
     Returns:
         LogisticRegression: The trained logistic regression model.
     """
-    model = LogisticRegression()
+    logger.info("Training Logistic Regression model...")
+    model = LogisticRegression(max_iter=1000)
     model.fit(X, y)
     return model
 
-def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray):
+def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray) -> dict:
     """
     Evaluates the model using test data.
 
@@ -65,95 +69,102 @@ def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray):
         y_test (np.ndarray): The test target variable.
 
     Returns:
-        float: The accuracy of the model.
+        dict: Evaluation metrics including accuracy, precision, recall, and confusion matrix.
     """
+    logger.info("Evaluating model...")
     y_pred = model.predict(X_test)
-
     accuracy = accuracy_score(y_test, y_pred)
+    classification_rep = classification_report(y_test, y_pred, output_dict=True)
+    confusion_mat = confusion_matrix(y_test, y_pred)
+    
+    metrics = {
+        "accuracy": accuracy,
+        "precision": classification_rep["weighted avg"]["precision"],
+        "recall": classification_rep["weighted avg"]["recall"],
+        "f1_score": classification_rep["weighted avg"]["f1-score"],
+        "confusion_matrix": confusion_mat
+    }
+    return metrics
 
-    return accuracy
-
-class DPLogisticRegression(nn.Module):
+class SimpleNN(nn.Module):
     """
-    A differentially private logistic regression model using the crypten library.
+    A simple neural network for binary classification.
     """
-
-    def __init__(self, input_dim: int, epsilon: float, delta: float):
-        super().__init__()
-        self.fc = DPLinear(input_dim, 1, epsilon=epsilon, delta=delta)
+    def __init__(self, input_dim: int):
+        super(SimpleNN, self).__init__()
+        self.fc = nn.Linear(input_dim, 1)
 
     def forward(self, x):
         x = torch.sigmoid(self.fc(x))
         return x
 
-def train_dp_logistic_regression_model(X: np.ndarray, y: np.ndarray, epsilon: float, delta: float):
+def train_simple_nn_model(X: np.ndarray, y: np.ndarray, epochs: int = 100, lr: float = 0.01) -> SimpleNN:
     """
-    Trains a differentially private logistic regression model using the given features and target.
+    Trains a simple neural network model using the given features and target.
 
     Args:
         X (np.ndarray): The features for model training.
         y (np.ndarray): The target variable for model training.
-        epsilon (float): The privacy budget for differential privacy.
-        delta (float): The probability of failure for differential privacy.
+        epochs (int): Number of training epochs.
+        lr (float): Learning rate for the optimizer.
 
     Returns:
-        DPLogisticRegression: The trained differentially private logistic regression model.
+        SimpleNN: The trained simple neural network model.
     """
-    # Convert data to Crypten tensors
-    X_ct = to_crypten_tensor(X, torch.float32)
-    y_ct = to_crypten_tensor(y, torch.float32)
-
-    # Define the model
-    model = DPLogisticRegression(X.shape[1], epsilon, delta)
-
-    # Define the loss function and optimizer
+    logger.info("Training simple neural network model...")
+    model = SimpleNN(X.shape[1])
     loss_function = nn.BCELoss()
-    optimizer = DPOptimizer(optim.SGD(model.parameters(), lr=0.01), epsilon, delta)
+    optimizer = optim.SGD(model.parameters(), lr=lr)
 
-    # Train the model
-    for epoch in range(100):
+    X_tensor = torch.tensor(X, dtype=torch.float32)
+    y_tensor = torch.tensor(y, dtype=torch.float32).view(-1, 1)
+
+    for epoch in range(epochs):
+        model.train()
         optimizer.zero_grad()
-        outputs = model(X_ct)
-        loss = loss_function(outputs, y_ct)
+        outputs = model(X_tensor)
+        loss = loss_function(outputs, y_tensor)
         loss.backward()
         optimizer.step()
 
     return model
 
-def evaluate_dp_model(model, X_test: np.ndarray, y_test: np.ndarray):
+def evaluate_nn_model(model, X_test: np.ndarray, y_test: np.ndarray) -> float:
     """
-    Evaluates the differentially private model using test data.
+    Evaluates the simple neural network model using test data.
 
     Args:
-        model: The trained differentially private logistic regression model.
+        model: The trained simple neural network model.
         X_test (np.ndarray): The test features.
         y_test (np.ndarray): The test target variable.
 
     Returns:
         float: The accuracy of the model.
     """
-    y_pred = (model(to_crypten_tensor(X_test, torch.float32)).get_plain_text().detach().numpy() > 0.5).astype(int)
-
-    accuracy = accuracy_score(y_test, y_pred)
-
+    logger.info("Evaluating simple neural network model...")
+    model.eval()
+    X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
+    y_test_tensor = torch.tensor(y_test, dtype=torch.float32).view(-1, 1)
+    with torch.no_grad():
+        y_pred = model(X_test_tensor).numpy().round().astype(int)
+    accuracy = accuracy_score(y_test_tensor, y_pred)
     return accuracy
 
 if __name__ == "__main__":
     # Load and preprocess data
     data = load_preprocessed_data("data/bank-full.csv")
-    X, y = prepare_features_and_target(data)
+    processed_data = _preprocess_data(data)
+    X, y = prepare_features_and_target(processed_data)
 
     # Split data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Train logistic regression model without differential privacy
+    # Train and evaluate logistic regression model
     logistic_regression_model = train_logistic_regression_model(X_train, y_train)
-    accuracy = evaluate_model(logistic_regression_model, X_test, y_test)
-    print(f"Accuracy without differential privacy: {accuracy}")
+    metrics = evaluate_model(logistic_regression_model, X_test, y_test)
+    logger.info(f"Evaluation of Logistic Regression model: {metrics}")
 
-    # Train logistic regression model with differential privacy
-    epsilon = 1.0
-    delta = 1e-5
-    dp_logistic_regression_model = train_dp_logistic_regression_model(X_train, y_train, epsilon, delta)
-    accuracy = evaluate_dp_model(dp_logistic_regression_model, X_test, y_test)
-    print(f"Accuracy with differential privacy: {accuracy}")
+    # Train and evaluate simple neural network model
+    simple_nn_model = train_simple_nn_model(X_train, y_train)
+    nn_accuracy = evaluate_nn_model(simple_nn_model, X_test, y_test)
+    logger.info(f"Accuracy of Simple Neural Network model: {nn_accuracy}")

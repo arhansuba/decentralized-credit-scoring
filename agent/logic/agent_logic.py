@@ -1,63 +1,150 @@
-from giza.agents import AgentResult, GizaAgent
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+import numpy as np
+from sklearn.linear_model import LogisticRegression, RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.pipeline import Pipeline
+from giza.agents import AgentResult, GizaAgent
+import logging
 
-class MyAgent(GizaAgent):
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class CreditScoringAgent(GizaAgent):
     """
-    A custom agent that performs logistic regression on a dataset.
+    A Giza agent that performs credit scoring using a machine learning model.
+
+    Attributes:
+        id (str): The unique ID of the agent.
+        name (str): The name of the agent.
+        model (sklearn.base.BaseEstimator): The machine learning model used for credit scoring.
     """
 
-    def __init__(self, dataset_path: str):
+    def __init__(self, id: str, name: str, dataset_path: str = None, model=None, use_grid_search: bool = False):
         """
-        Initializes the agent with a dataset path.
+        Initializes a CreditScoringAgent object.
 
         Args:
+            id (str): The unique ID of the agent.
+            name (str): The name of the agent.
             dataset_path (str): The path to the dataset CSV file.
+            model (sklearn.base.BaseEstimator): The machine learning model used for credit scoring.
+            use_grid_search (bool): Flag indicating whether to use GridSearchCV for hyperparameter tuning.
         """
-        super().__init__()
+        super().__init__(id, name)
         self.dataset_path = dataset_path
+        self.model = model if model else LogisticRegression()
+        self.use_grid_search = use_grid_search
+
+    def preprocess_data(self, dataset: pd.DataFrame):
+        """Preprocess the dataset by encoding categorical variables and scaling numeric features."""
+        logger.info("Preprocessing data...")
+        # Encode categorical variables
+        for column in dataset.select_dtypes(include=['object']).columns:
+            dataset[column] = LabelEncoder().fit_transform(dataset[column])
+
+        # Separate features and target
+        X = dataset.drop(columns=["target"])
+        y = dataset["target"]
+
+        # Scale numeric features
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X)
+
+        return X, y
+
+    def train_model(self):
+        """Trains the machine learning model if a dataset path is provided."""
+        if self.dataset_path:
+            # Load the dataset
+            dataset = pd.read_csv(self.dataset_path)
+            X, y = self.preprocess_data(dataset)
+
+            # Split the data into training and testing sets
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+            if self.use_grid_search:
+                logger.info("Using GridSearchCV for hyperparameter tuning...")
+                # Define hyperparameter grid
+                param_grid = {
+                    'C': [0.1, 1, 10, 100],
+                    'solver': ['lbfgs', 'liblinear']
+                }
+                grid_search = GridSearchCV(LogisticRegression(), param_grid, cv=5, scoring='accuracy')
+                grid_search.fit(X_train, y_train)
+                self.model = grid_search.best_estimator_
+                logger.info(f"Best parameters found: {grid_search.best_params_}")
+            else:
+                # Train the model
+                logger.info("Training model...")
+                self.model.fit(X_train, y_train)
+
+            # Evaluate the model on the test set
+            y_pred = self.model.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred)
+            recall = recall_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred)
+            roc_auc = roc_auc_score(y_test, y_pred)
+
+            logger.info(f"Model evaluation metrics:\n"
+                        f"Accuracy: {accuracy}\n"
+                        f"Precision: {precision}\n"
+                        f"Recall: {recall}\n"
+                        f"F1 Score: {f1}\n"
+                        f"ROC AUC Score: {roc_auc}")
 
     def process(self, data: pd.DataFrame) -> AgentResult:
         """
-        Processes the data by performing logistic regression and returns the result.
+        Processes the input data by performing credit scoring using the machine learning model.
 
         Args:
             data (pd.DataFrame): The input data.
 
         Returns:
-            AgentResult: The result of the logistic regression model.
+            AgentResult: The result of the agent's processing.
         """
-        # Load the dataset
-        dataset = pd.read_csv(self.dataset_path)
+        if self.model is None:
+            raise ValueError("No model provided or trained. Please provide a model or train one with a dataset path.")
 
-        # Split the data into features and target
-        X = dataset.drop(columns=["target"])
-        y = dataset["target"]
+        # Preprocess the data
+        X = data.copy()
+        if "target" in X.columns:
+            X = X.drop(columns=["target"])
+        for column in X.select_dtypes(include=['object']).columns:
+            X[column] = LabelEncoder().fit_transform(X[column])
+        X = StandardScaler().fit_transform(X)
 
-        # Split the data into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Make predictions using the machine learning model
+        predictions = self.model.predict(X)
 
-        # Train a logistic regression model
-        model = LogisticRegression()
-        model.fit(X_train, y_train)
+        # Calculate the accuracy of the predictions if the actual scores are available
+        accuracy = None
+        if "credit_score" in data.columns:
+            accuracy = accuracy_score(data["credit_score"], predictions)
 
-        # Evaluate the model on the test set
-        y_pred = model.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
+        # Format the output as a string
+        output = ""
+        for i, prediction in enumerate(predictions):
+            output += f"{data.iloc[i]['name']}: {prediction}\n"
 
-        # Create an AgentResult object with the accuracy
-        result = AgentResult(accuracy=accuracy)
+        # Return the result as an AgentResult object
+        return AgentResult(accuracy, output)
 
-        return result
 
 if __name__ == "__main__":
-    # Create an instance of the MyAgent class
-    agent = MyAgent("data/dataset.csv")
+    # Create an instance of the CreditScoringAgent class
+    agent = CreditScoringAgent(id="1", name="CreditScoringAgent", dataset_path="data/training.csv", use_grid_search=True)
+
+    # Train the model if a dataset path is provided
+    agent.train_model()
 
     # Process the data and get the result
-    result = agent.process(pd.DataFrame())
+    test_data = pd.read_csv("data/testing.csv")
+    result = agent.process(test_data)
 
     # Print the result
     print(f"Accuracy: {result.accuracy}")
+    print(f"Output:\n{result.output}")
