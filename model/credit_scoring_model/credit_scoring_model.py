@@ -12,6 +12,8 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+file_path = 'data/training.csv'
+
 def load_preprocessed_data(file_path: str) -> pd.DataFrame:
     """
     Loads preprocessed data from a CSV file and returns a pandas DataFrame.
@@ -104,17 +106,26 @@ def main():
     Trains and evaluates the credit scoring model.
     """
     # Load preprocessed data
-    file_path = 'data/preprocessed/credit_data.csv'
-    data = load_preprocessed_data(file_path)
+    training_file_path = 'data/training.csv'
+    testing_file_path = 'data/testing.csv'
+    hasil_file_path = 'data/Hasil Testing Credit Scoring.csv'
+
+    training_data = load_preprocessed_data(training_file_path)
+    testing_data = load_preprocessed_data(testing_file_path)
+    hasil_data = load_preprocessed_data(hasil_file_path)
 
     # Preprocess data
-    processed_data = _preprocess_data(data)
+    training_processed_data = _preprocess_data(training_data)
+    testing_processed_data = _preprocess_data(testing_data)
+    hasil_processed_data = _preprocess_data(hasil_data)
 
     # Prepare features and target
-    X, y = prepare_features_and_target(processed_data)
+    X_train, y_train = prepare_features_and_target(training_processed_data)
+    X_test, y_test = prepare_features_and_target(testing_processed_data)
+    X_hasil, y_hasil = prepare_features_and_target(hasil_processed_data)
 
-    # Split data into train and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    # Split data into training and validation sets
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
 
     # Train logistic regression model
     lr_model = train_logistic_regression_model(X_train, y_train)

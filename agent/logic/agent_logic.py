@@ -70,7 +70,7 @@ class CreditScoringAgent(GizaAgent):
                 # Define hyperparameter grid
                 param_grid = {
                     'C': [0.1, 1, 10, 100],
-                    'solver': ['lbfgs', 'liblinear']
+                    'olver': ['lbfgs', 'liblinear']
                 }
                 grid_search = GridSearchCV(LogisticRegression(), param_grid, cv=5, scoring='accuracy')
                 grid_search.fit(X_train, y_train)
@@ -117,7 +117,7 @@ class CreditScoringAgent(GizaAgent):
             X[column] = LabelEncoder().fit_transform(X[column])
         X = StandardScaler().fit_transform(X)
 
-        # Make predictions using the machine learning model
+        # Make predictions using the machinelearning model
         predictions = self.model.predict(X)
 
         # Calculate the accuracy of the predictions if the actual scores are available

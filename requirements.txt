@@ -10,3 +10,6 @@ python-dotenv
 scikit_learn
 torch
 seaborn
+sklearn 
+logging
+matplotlib

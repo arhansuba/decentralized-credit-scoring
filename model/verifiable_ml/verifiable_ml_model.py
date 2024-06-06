@@ -1,4 +1,3 @@
-from matplotlib import _preprocess_data
 import numpy as np
 import pandas as pd
 import torch
@@ -59,33 +58,6 @@ def train_logistic_regression_model(X: np.ndarray, y: np.ndarray) -> LogisticReg
     model.fit(X, y)
     return model
 
-def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray) -> dict:
-    """
-    Evaluates the model using test data.
-
-    Args:
-        model: The trained logistic regression model.
-        X_test (np.ndarray): The test features.
-        y_test (np.ndarray): The test target variable.
-
-    Returns:
-        dict: Evaluation metrics including accuracy, precision, recall, and confusion matrix.
-    """
-    logger.info("Evaluating model...")
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    classification_rep = classification_report(y_test, y_pred, output_dict=True)
-    confusion_mat = confusion_matrix(y_test, y_pred)
-    
-    metrics = {
-        "accuracy": accuracy,
-        "precision": classification_rep["weighted avg"]["precision"],
-        "recall": classification_rep["weighted avg"]["recall"],
-        "f1_score": classification_rep["weighted avg"]["f1-score"],
-        "confusion_matrix": confusion_mat
-    }
-    return metrics
-
 class SimpleNN(nn.Module):
     """
     A simple neural network for binary classification.
@@ -129,6 +101,33 @@ def train_simple_nn_model(X: np.ndarray, y: np.ndarray, epochs: int = 100, lr: f
 
     return model
 
+def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray) -> dict:
+    """
+    Evaluates the model using test data.
+
+    Args:
+        model: The trained logistic regression model.
+        X_test (np.ndarray): The test features.
+        y_test (np.ndarray): The test target variable.
+
+    Returns:
+        dict: Evaluation metrics including accuracy, precision, recall, and confusion matrix.
+    """
+    logger.info("Evaluating model...")
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    classification_rep = classification_report(y_test, y_pred, output_dict=True)
+    confusion_mat = confusion_matrix(y_test, y_pred)
+    
+    metrics = {
+        "accuracy": accuracy,
+        "precision": classification_rep["weighted avg"]["precision"],
+        "recall": classification_rep["weighted avg"]["recall"],
+        "f1_score": classification_rep["weighted avg"]["f1-score"],
+        "confusion_matrix": confusion_mat
+    }
+    return metrics
+
 def evaluate_nn_model(model, X_test: np.ndarray, y_test: np.ndarray) -> float:
     """
     Evaluates the simple neural network model using test data.
@@ -150,21 +149,48 @@ def evaluate_nn_model(model, X_test: np.ndarray, y_test: np.ndarray) -> float:
     accuracy = accuracy_score(y_test_tensor, y_pred)
     return accuracy
 
-if __name__ == "__main__":
-    # Load and preprocess data
-    data = load_preprocessed_data("data/bank-full.csv")
-    processed_data = _preprocess_data(data)
-    X, y = prepare_features_and_target(processed_data)
+def main():
+    """
+    Trains and evaluates the credit scoring model.
+    """
+    # Load preprocessed data
+    training_file_path = 'data/training.csv'
+    testing_file_path = 'data/testing.csv'
+    hasil_file_path = 'data/Hasil Testing Credit Scoring.csv'
 
-    # Split data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    training_data = load_preprocessed_data(training_file_path)
+    testing_data = load_preprocessed_data(testing_file_path)
+    hasil_data = load_preprocessed_data(hasil_file_path)
 
-    # Train and evaluate logistic regression model
+    # Prepare features and target
+    X_train, y_train = prepare_features_and_target(training_data)
+    X_test, y_test = prepare_features_and_target(testing_data)
+    X_hasil, y_hasil = prepare_features_and_target(hasil_data)
+
+    # Split data into training and validation sets
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+
+    # Train logistic regression model
     logistic_regression_model = train_logistic_regression_model(X_train, y_train)
-    metrics = evaluate_model(logistic_regression_model, X_test, y_test)
-    logger.info(f"Evaluation of Logistic Regression model: {metrics}")
 
-    # Train and evaluate simple neural network model
+    # Train simple neural network model
     simple_nn_model = train_simple_nn_model(X_train, y_train)
+
+    # Evaluate models
+    metrics = evaluate_model(logistic_regression_model, X_test, y_test)
     nn_accuracy = evaluate_nn_model(simple_nn_model, X_test, y_test)
+    hasil_metrics = evaluate_model(logistic_regression_model, X_hasil, y_hasil)
+
+    # Log evaluation metrics
+    logger.info("Logistic Regression Metrics:")
+    for metric, value in metrics.items():
+        logger.info(f"{metric.capitalize()}: {value}")
+
     logger.info(f"Accuracy of Simple Neural Network model: {nn_accuracy}")
+    logger.info("Hasil Metrics:")
+    for metric, value in hasil_metrics.items():
+        logger.info(f"{metric.capitalize()}: {value}")
+
+if __name__ == "__main__":
+    main()
+
