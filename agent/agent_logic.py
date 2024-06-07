@@ -1,10 +1,9 @@
+from ape import Contract
 import pandas as pd
-import numpy as np
-from sklearn.linear_model import LogisticRegression, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.pipeline import Pipeline
 from giza.agents import AgentResult, GizaAgent
 import logging
 
@@ -22,18 +21,19 @@ class CreditScoringAgent(GizaAgent):
         model (sklearn.base.BaseEstimator): The machine learning model used for credit scoring.
     """
 
-    def __init__(self, id: str, name: str, dataset_path: str = None, model=None, use_grid_search: bool = False):
+    def __init__(self, id: str, name: str, contracts, dataset_path: str = None, model=None, use_grid_search: bool = False):
         """
         Initializes a CreditScoringAgent object.
 
         Args:
             id (str): The unique ID of the agent.
             name (str): The name of the agent.
+            contracts: Contracts for the Giza agent.
             dataset_path (str): The path to the dataset CSV file.
             model (sklearn.base.BaseEstimator): The machine learning model used for credit scoring.
             use_grid_search (bool): Flag indicating whether to use GridSearchCV for hyperparameter tuning.
         """
-        super().__init__(id, name)
+        super().__init__(id, name, contracts)
         self.dataset_path = dataset_path
         self.model = model if model else LogisticRegression()
         self.use_grid_search = use_grid_search
@@ -70,7 +70,7 @@ class CreditScoringAgent(GizaAgent):
                 # Define hyperparameter grid
                 param_grid = {
                     'C': [0.1, 1, 10, 100],
-                    'olver': ['lbfgs', 'liblinear']
+                    'solver': ['lbfgs', 'liblinear']
                 }
                 grid_search = GridSearchCV(LogisticRegression(), param_grid, cv=5, scoring='accuracy')
                 grid_search.fit(X_train, y_train)
@@ -135,8 +135,11 @@ class CreditScoringAgent(GizaAgent):
 
 
 if __name__ == "__main__":
+    # Contracts placeholder - replace with actual contracts as needed
+    contracts = []
+
     # Create an instance of the CreditScoringAgent class
-    agent = CreditScoringAgent(id="1", name="CreditScoringAgent", dataset_path="data/training.csv", use_grid_search=True)
+    agent = CreditScoringAgent(id="1", name="CreditScoringAgent", contracts=contracts, dataset_path="data/training.csv", use_grid_search=True)
 
     # Train the model if a dataset path is provided
     agent.train_model()
