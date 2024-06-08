@@ -33,7 +33,7 @@ class CreditScoringAgent(GizaAgent):
             model (sklearn.base.BaseEstimator): The machine learning model used for credit scoring.
             use_grid_search (bool): Flag indicating whether to use GridSearchCV for hyperparameter tuning.
         """
-        super().__init__(id, name, contracts)
+        super().__init__(id, name, contracts, dataset_path, use_grid_search )
         self.dataset_path = dataset_path
         self.model = model if model else LogisticRegression()
         self.use_grid_search = use_grid_search
@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     # Create an instance of the CreditScoringAgent class
     agent = CreditScoringAgent(id="1", name="CreditScoringAgent", contracts=contracts, dataset_path="data/training.csv", use_grid_search=True)
-
+    
     # Train the model if a dataset path is provided
     agent.train_model()
 
